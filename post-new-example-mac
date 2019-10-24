@@ -1,0 +1,102 @@
+#!/usr/bin/env ruby
+
+require_relative './notmuch'
+
+DRY_RUN = false
+
+My_mail_addrs = %w{
+abc@a.com
+def@b.com
+}
+
+Academic_mail_addrs = %w{
+ghi@c.com
+jkl@d.com
+}
+
+News_mail_addrs = %w{
+mno@e.com
+pqr@f.com
+}
+
+Spam_mail_addrs = %w{
+stu@g.com
+vwx@h.com
+}
+
+## Tagging
+
+# Remove unread tag for drafts
+mark_draft_as_read_expr = And.new(Tag.new("draft"), Tag.new("unread"))
+
+NotmuchTagCommand.new(
+  %w(),
+  %w(unread),
+  mark_draft_as_read_expr
+).run(dry: DRY_RUN)
+
+# Mark sent
+mark_sent_expr = And.new(Or.new(*(My_mail_addrs.map {|addr| From.new(addr)})),
+                         Not.new(Or.new(*(My_mail_addrs.map {|addr| To.new(addr)}))))
+
+NotmuchTagCommand.new(
+  %w(sent),
+  %w(inbox unread),
+  mark_sent_expr
+).run(dry: DRY_RUN)
+
+# Mark academic
+mark_academic_expr = Or.new(*(Academic_mail_addrs.map {|addr| From.new(addr)}))
+
+NotmuchTagCommand.new(
+  %w(academic news),
+  %w(inbox unread),
+  mark_academic_expr
+).run(dry: DRY_RUN)
+
+# Mark news
+mark_news_expr = Or.new(*(News_mail_addrs.map {|addr| From.new(addr)}),
+                        And.new(From.new("no-reply@mail.goodreads.com"),
+                                Or.new(Subject.new("Newsletter"),
+                                       Subject.new("Releases"))))
+
+NotmuchTagCommand.new(
+  %w(news),
+  %w(inbox unread),
+  mark_news_expr
+).run(dry: DRY_RUN)
+
+# Mark spam
+mark_spam_expr = Or.new(*(Spam_mail_addrs.map {|addr| From.new(addr)}))
+
+NotmuchTagCommand.new(
+  %w(spam),
+  %w(inbox unread),
+  mark_spam_expr
+).run(dry: DRY_RUN)
+
+## Notifications
+
+require 'json'
+
+class OSAScriptCommand
+  def initialize(script)
+    @script = script
+  end
+  def run
+    system "osascript", "-e", @script
+  end
+end
+
+class OSANotification < OSAScriptCommand
+  def initialize(title, subtitle, content)
+    super "display notification \"#{content}\" with title \"#{title}\" subtitle \"#{subtitle}\""
+  end
+end
+
+query_unread = NotmuchSearchCommand.new(Tag.new("unread"), format: "json").run
+unread = JSON.parse query_unread
+
+unread.each do |msg|
+  OSANotification.new("Email from: #{msg["authors"]}", nil, msg["subject"]).run
+end
