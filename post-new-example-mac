@@ -56,7 +56,7 @@ NotmuchTagCommand.new(
 
 # Mark news
 mark_news_expr = Or.new(*(News_mail_addrs.map {|addr| From.new(addr)}),
-                        And.new(From.new("no-reply@mail.goodreads.com"),
+                        And.new(From.new("abc@abc.com"),
                                 Or.new(Subject.new("Newsletter"),
                                        Subject.new("Releases"))))
 
